@@ -4,12 +4,11 @@ was pressed, with a short fade after release.
 
 The mouse reports carry the *function* that was sent, not the physical button, so a part lights when the
 function it is mapped to arrives (keyboard shortcuts are not followed: they come from another interface).
+Windows keeps the mouse reports to itself: there only the DPI button and the media keys light up.
 """
-import os
-import select
 import time
 
-from .. import config, discovery, protocol as p
+from .. import config, device, protocol as p
 from . import theme
 from .drawing import mix
 from .theme import ACCENT, BG, SEL_FILL
@@ -41,22 +40,21 @@ class LiveInput:
     def _live_loop(self):
         """Background thread: follow the mouse and vendor reports; reconnects every second."""
         while not self._closing:
-            fds = {}
+            links = []
             try:
-                settings = next(discovery.find_devices(), (None,))[0]
-                mouse_node = settings and discovery.find_mouse_node(settings)
-                for path, kind in ((mouse_node, "mouse"), (settings, "vendor")):
-                    if path:
-                        fds[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = kind
-                while fds and not self._closing:
-                    for fd in select.select(list(fds), [], [], 0.5)[0]:
-                        for what, value in parse_report(fds[fd], os.read(fd, 64)):
-                            self.after(0, self.live, what, value)
+                links = device.open_live()
+                while links and not self._closing:
+                    for kind, link in links:
+                        r = link.read(device.LIVE_WAIT)
+                        while r:                                    # drain: the mouse reports come at 1000 Hz
+                            for what, value in parse_report(kind, r):
+                                self.after(0, self.live, what, value)
+                            r = link.read(0)
             except OSError:
                 pass
             finally:
-                for fd in fds:
-                    os.close(fd)
+                for _kind, link in links:
+                    link.close()
             if not self._closing:
                 time.sleep(1)
 

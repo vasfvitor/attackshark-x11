@@ -8,7 +8,7 @@ from . import config, device, discovery, protocol as p, state
 
 def parser():
     ap = argparse.ArgumentParser(prog="x11ctl", description="Configure the ATTACK SHARK X11 mouse on Linux.")
-    ap.add_argument("-d", "--device", help="hidraw node (default: auto-detect)")
+    ap.add_argument("-d", "--device", help="device path, as listed by `x11ctl list` (default: auto-detect)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list", help="list detected receivers / mice")
     sub.add_parser("info", help="model, battery and current settings")

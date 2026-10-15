@@ -1,18 +1,48 @@
-"""Transport to the mouse over ``/dev/hidraw``: feature reports (settings) and input report 0x03 (events)."""
-import fcntl
-import os
-import select
+"""Transport to the mouse: feature reports (settings) and input report 0x03 (events), over ``/dev/hidraw`` on Linux
+and ``hidapi`` on Windows."""
 import sys
 import time
 
 from . import discovery, protocol as p
 
+WINDOWS = sys.platform == "win32"
 ACK_TRIES, ACK_WAIT = 10, 0.5        # the app resends every 500 ms until the mouse ACKs, at most 10 times
 READ_WAIT = {p.PID_RECEIVER: 0.5, p.PID_WIRED: 0.1}   # pause between the read request and the answer
+LIVE_WAIT = 0.01                     # live_reports: wait per source and pass
 
 
-def _ioc(nr, size):
-    return (3 << 30) | (size << 16) | (ord("H") << 8) | nr        # _IOC(_IOC_READ|_IOC_WRITE, 'H', nr, size)
+def open_link(path):
+    """The platform's link to the settings interface at ``path``: ``set_feature``, ``get_feature``, ``read``."""
+    if WINDOWS:
+        from .winhid import WinLink
+        return WinLink(path)
+    from .hidraw import HidrawLink
+    return HidrawLink(path)
+
+
+def open_live():
+    """``[(kind, link)]`` with the reports the GUI follows for live presses: "mouse" (clicks, wheel; Linux only)
+    and "vendor" (events, media keys). Empty when no mouse is plugged in."""
+    settings = next(discovery.find_devices(), (None,))[0]
+    if settings is None:
+        return []
+    if WINDOWS:
+        from .winhid import Handle, live_paths
+        sources = [("vendor", Handle, q) for q in live_paths(settings)]
+    else:
+        from .hidraw import HidrawLink
+        mouse = discovery.find_mouse_node(settings)
+        sources = [(kind, lambda q: HidrawLink(q, write=False), q)
+                   for kind, q in (("mouse", mouse), ("vendor", settings)) if q]
+    links = []
+    try:
+        for kind, opener, path in sources:
+            links.append((kind, opener(path)))
+    except OSError:
+        for _kind, link in links:
+            link.close()
+        raise
+    return links
 
 
 class Device:
@@ -27,32 +57,32 @@ class Device:
             sys.exit("no ATTACK SHARK receiver or mouse found (is the receiver plugged in?)")
         self.path, self.pid = devs[0]
         try:
-            self.fd = os.open(self.path, os.O_RDWR | os.O_NONBLOCK)
+            self.link = open_link(self.path)
         except PermissionError:
             sys.exit(f"permission denied on {self.path}: install udev/70-attackshark-x11.rules (see README)")
+        except OSError as e:
+            sys.exit(f"cannot open the mouse: {e}")
         self.model = self.battery = None
 
     def close(self):
-        os.close(self.fd)
+        self.link.close()
 
     # ------------------------------------------------------------ raw I/O
     def set_feature(self, data):
-        fcntl.ioctl(self.fd, _ioc(0x06, len(data)), bytearray(data))
+        self.link.set_feature(data)
 
     def get_feature(self, rid, size):
-        buf = bytearray(size)
-        buf[0] = rid
-        fcntl.ioctl(self.fd, _ioc(0x07, size), buf)
-        return bytes(buf)
+        return self.link.get_feature(rid, size)
 
     def events(self, timeout):
         """Yield ``(event, v0, v1)`` for every input report 0x03 within ``timeout`` seconds (also updates
         ``model`` and ``battery``)."""
         end = time.time() + timeout
         while (left := end - time.time()) > 0:
-            if not select.select([self.fd], [], [], left)[0]:
+            r = self.link.read(left)
+            if r is None:
                 return
-            ev = p.parse_event(os.read(self.fd, 64))
+            ev = p.parse_event(r)
             if ev:
                 model, event, v0, v1 = ev
                 self.model = model

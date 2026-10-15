@@ -1,6 +1,9 @@
 import os
+import sys
 
-from sharkx11 import discovery, protocol as p
+import pytest
+
+from sharkx11 import discovery, protocol as p, winhid
 
 DESC_SETTINGS = bytes.fromhex("05 01 09 80 a1 01 c0 05 0b 09 00 a1 01 85 04 c0")
 
@@ -10,6 +13,11 @@ def make(tmp_path, name, hid_id, desc):
     d.mkdir(parents=True)
     (d / "uevent").write_text(f"HID_ID={hid_id}\nHID_NAME=x\n")
     (d / "report_descriptor").write_bytes(desc)
+
+
+@pytest.fixture(autouse=True)
+def linux(monkeypatch):
+    monkeypatch.setattr(discovery, "WINDOWS", False)
 
 
 def test_find_devices(tmp_path, monkeypatch):
@@ -24,6 +32,13 @@ def test_find_devices(tmp_path, monkeypatch):
     assert list(discovery.find_devices()) == [("/dev/hidraw3", p.PID_RECEIVER), ("/dev/hidraw1", p.PID_WIRED)]
 
 
+def test_find_devices_on_windows(monkeypatch):
+    monkeypatch.setattr(discovery, "WINDOWS", True)
+    monkeypatch.setattr(winhid, "find_devices", lambda: [("col4", p.PID_RECEIVER)])
+    assert list(discovery.find_devices()) == [("col4", p.PID_RECEIVER)]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="sysfs paths (colons, symlinks)")
 def test_find_mouse_node(tmp_path, monkeypatch):
     monkeypatch.setattr(discovery, "SYS", str(tmp_path / "sys"))
     usb = tmp_path / "devices/3-1"

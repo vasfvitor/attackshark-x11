@@ -1,8 +1,12 @@
-"""Find the mouse's settings ``hidraw`` node in sysfs: interface 2 of the receiver or of the wired mouse."""
+"""Find the mouse's settings interface: interface 2 of the receiver or of the wired mouse (its ``hidraw`` node in
+sysfs on Linux, its usage-page-0x0B collection on Windows)."""
 import glob
 import os
+import sys
 
 from . import protocol
+
+WINDOWS = sys.platform == "win32"
 
 SYS, DEV = "/sys", "/dev"   # roots, overridable by tests
 SETTINGS_COLLECTION = b"\x05\x0b\x09\x00"   # usage page 0x0B, usage 0: the feature (settings) collection
@@ -17,7 +21,11 @@ def _read(path):
 
 
 def find_devices():
-    """Yield ``(hidraw_path, pid)`` for every receiver/wired mouse settings interface, receiver first."""
+    """Yield ``(path, pid)`` for every receiver/wired mouse settings interface, receiver first."""
+    if WINDOWS:
+        from . import winhid
+        yield from winhid.find_devices()
+        return
     found = []
     for d in sorted(glob.glob(SYS + "/class/hidraw/hidraw*")):
         ue = _read(d + "/device/uevent").decode(errors="replace")

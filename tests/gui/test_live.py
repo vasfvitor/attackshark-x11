@@ -1,9 +1,5 @@
 """Live presses: report parsing, mapping functions to parts, the animation and the reader thread."""
-import os
-import socket
-import time
-
-from sharkx11 import config, discovery, protocol as p
+from sharkx11 import config, device, protocol as p
 from sharkx11.gui import live, theme
 
 from .conftest import clear_timers
@@ -72,48 +68,52 @@ def test_live_before_a_read(mk):
     assert not a.pressed
 
 
+class Link:
+    """A live source: hands out its reports, then fails like an unplugged receiver."""
+
+    def __init__(self, *reports):
+        self.reports, self.closed, self.waits = list(reports), False, []
+
+    def read(self, timeout):
+        self.waits.append(timeout)
+        if not self.reports:
+            raise OSError("unplugged")
+        return self.reports.pop(0)
+
+    def close(self):
+        self.closed = True
+
+
 def test_reader_thread(app, monkeypatch):
-    mouse_host, mouse_dev = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-    vend_host, vend_dev = socket.socketpair(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-    paths = {"/dev/m": mouse_host.fileno(), "/dev/v": vend_host.fileno()}
-    real_open, real_close = os.open, os.close
-    monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/v", p.PID_RECEIVER)]))
-    monkeypatch.setattr(discovery, "find_mouse_node", lambda path: "/dev/m")
-    monkeypatch.setattr(live.os, "open", lambda path, flags: paths[path] if path in paths else real_open(path, flags))
-    monkeypatch.setattr(live.os, "close", lambda fd: None if fd in paths.values() else real_close(fd))
+    mouse = Link(bytes([1, 0, 0, 0, 0, 0, 0]), bytes([0, 0, 0, 0, 0, 0xFF, 0]), None)
+    vendor = Link(bytes([2, 0xE9, 0]), None)
+    monkeypatch.setattr(device, "open_live", lambda: [("mouse", mouse), ("vendor", vendor)])
     got, sleeps = [], []
     monkeypatch.setattr(app, "after", lambda ms, fn, *args: got.append(args))
-    mouse_dev.send(bytes([1, 0, 0, 0, 0, 0, 0]))
-    vend_dev.send(bytes([2, 0xE9, 0]))
 
     def stop(s):
         sleeps.append(s)
         app._closing = True
     monkeypatch.setattr(live.time, "sleep", stop)
-    real_select = live.select.select
+    app._live_loop()
+    assert got == [("buttons", 1), ("buttons", 0), ("wheel", -1), ("consumer", 0xE9)]
+    assert mouse.waits[:3] == [device.LIVE_WAIT, 0, 0] and mouse.closed and vendor.closed and sleeps == [1]
+    app._closing = False
+    monkeypatch.setattr(device, "open_live", lambda: [])                 # nothing plugged: waits and retries
+    app._live_loop()
+    app._closing = False
 
-    def select_once(r, w, x, t):
-        ready = real_select(r, w, x, 0.05)[0]
-        if not ready:
-            raise OSError("unplugged")                             # drained: simulate the receiver going away
-        return ready, [], []
-    monkeypatch.setattr(live.select, "select", select_once)
-    app._live_loop()
-    assert ("buttons", 1) in got and ("consumer", 0xE9) in got and sleeps == [1]
-    app._closing = False
-    monkeypatch.setattr(discovery, "find_devices", lambda: iter([]))  # nothing plugged: waits and retries
+    def open_fails():
+        raise OSError("could not open")
+    monkeypatch.setattr(device, "open_live", open_fails)
     app._live_loop()
     app._closing = False
-    monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/v", p.PID_RECEIVER)]))
-
-    def close_now(r, w, x, t):                                     # window closed while listening
-        app._closing = True
-        return [], [], []
-    monkeypatch.setattr(live.select, "select", close_now)
+    quiet = Link()
+    quiet.read = lambda timeout: setattr(app, "_closing", True)          # window closed while listening
+    monkeypatch.setattr(device, "open_live", lambda: [("vendor", quiet)])
     app._live_loop()
+    assert quiet.closed
     app._closing = False
-    for s in (mouse_host, mouse_dev, vend_host, vend_dev):
-        s.close()
 
 
 def test_reader_stops_when_closing(app):

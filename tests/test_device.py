@@ -1,3 +1,6 @@
+import sys
+import types
+
 import pytest
 
 from sharkx11 import config, device, discovery, protocol as p
@@ -9,18 +12,23 @@ def test_open_errors(monkeypatch):
         device.Device()
     monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/x", p.PID_RECEIVER)]))
 
-    def denied(*a):
-        raise PermissionError
-    monkeypatch.setattr(device.os, "open", denied)
+    def fails(error):
+        def open_link(path):
+            raise error
+        return open_link
+    monkeypatch.setattr(device, "open_link", fails(PermissionError()))
     with pytest.raises(SystemExit, match="70-attackshark-x11.rules"):
         device.Device("/dev/other")
+    monkeypatch.setattr(device, "open_link", fails(OSError("could not open x")))
+    with pytest.raises(SystemExit, match="cannot open the mouse: could not open x"):
+        device.Device()
 
 
 def test_read_identify_and_events(fake):
     d = device.Device(fake.path)
     assert d.path == fake.path and d.pid == p.PID_RECEIVER
     fake.event(p.EV_BATTERY, 3, 87)
-    fake._dev.send(bytes([0x02, 0xE9, 0x00]))               # a consumer-key report is not an event
+    fake.send([0x02, 0xE9, 0x00])               # a consumer-key report is not an event
     assert d.identify() == (0x55, "1.12") and d.battery == (False, 84)       # the read's heartbeat is newer
     assert config.decode_dpi(d.read(p.DPI))["active"] == 2
     assert fake.log[-1] == p.read_request(p.DPI)
@@ -82,3 +90,33 @@ def test_wait_battery(fake):
     fake.event(p.EV_BATTERY, 1, 64)
     assert d.wait_battery(1) == (False, 64)
     assert d.wait_battery(0) == (False, 64)                 # already known: no wait
+
+
+class FakeHidraw:
+    def __init__(self, path, write=True):
+        if path == "/dev/locked":
+            raise PermissionError
+        self.path, self.write, self.closed = path, write, False
+
+    def close(self):
+        self.closed = True
+
+
+def test_linux_links(monkeypatch):
+    monkeypatch.setattr(device, "WINDOWS", False)
+    monkeypatch.setitem(sys.modules, "sharkx11.hidraw", types.SimpleNamespace(HidrawLink=FakeHidraw))
+    assert device.open_link("/dev/hidraw5").write
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/hidraw5", p.PID_RECEIVER)]))
+    monkeypatch.setattr(discovery, "find_mouse_node", lambda path: "/dev/hidraw4")
+    links = device.open_live()
+    assert [(k, link.path, link.write) for k, link in links] == [("mouse", "/dev/hidraw4", False),
+                                                                 ("vendor", "/dev/hidraw5", False)]
+    monkeypatch.setattr(discovery, "find_mouse_node", lambda path: None)          # wired: no mouse node found
+    assert [k for k, _link in device.open_live()] == ["vendor"]
+    opened = []
+    monkeypatch.setattr(discovery, "find_mouse_node", lambda path: "/dev/hidraw4")
+    monkeypatch.setattr(discovery, "find_devices", lambda: iter([("/dev/locked", p.PID_RECEIVER)]))
+    monkeypatch.setattr(FakeHidraw, "close", lambda self: opened.append(self.path))
+    with pytest.raises(PermissionError):
+        device.open_live()
+    assert opened == ["/dev/hidraw4"]                       # the mouse node was closed again
