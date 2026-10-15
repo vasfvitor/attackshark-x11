@@ -1,6 +1,7 @@
 """x11gui: reading, editing every tab, auto-save, live events, backups, language."""
 import json
 import tkinter as tk
+from types import SimpleNamespace
 
 import pytest
 
@@ -314,8 +315,21 @@ def test_main_restarts_until_closed(monkeypatch):
         def mainloop(self):
             pass
     monkeypatch.setattr(app_mod, "App", Fake)
+    monkeypatch.setattr(app_mod, "WINDOWS", False)
     app_mod.main()
     assert len(runs) == 2
+    aware = []
+    shcore = SimpleNamespace(SetProcessDpiAwareness=aware.append)
+    monkeypatch.setattr(app_mod.ctypes, "windll", SimpleNamespace(shcore=shcore), raising=False)
+    monkeypatch.setattr(app_mod, "WINDOWS", True)
+    app_mod.main()
+    assert aware == [1] and len(runs) == 3
+
+    def old_windows(level):
+        raise AttributeError("no shcore before Windows 8.1")
+    shcore.SetProcessDpiAwareness = old_windows
+    app_mod.main()
+    assert len(runs) == 4
 
 
 def test_real_startup_in_english(monkeypatch, fake, settings_file):
@@ -341,8 +355,17 @@ def test_settings_file_errors(monkeypatch, tmp_path):
     assert app_mod.load_settings() == {}
 
 
-def test_i18n():
+def test_i18n(monkeypatch):
     assert i18n.system_lang({"LANG": "pt_BR.UTF-8"}) == "pt" and i18n.system_lang({"LC_ALL": "de_DE"}) == "en"
+    monkeypatch.setattr(i18n, "WINDOWS", False)
+    assert i18n.system_lang({}) == "en"
+    monkeypatch.setattr(i18n, "WINDOWS", True)                 # Windows, no env: the user's UI language
+    ui = []
+    kernel32 = SimpleNamespace(GetUserDefaultUILanguage=lambda: ui[0])
+    monkeypatch.setattr(i18n.ctypes, "windll", SimpleNamespace(kernel32=kernel32), raising=False)
+    ui.append(0x0416)                                           # pt-BR
+    assert i18n.system_lang({}) == "pt" and i18n.system_lang({"LANG": "en_US"}) == "en"
+    ui[0] = 0x0409                                              # en-US
     assert i18n.system_lang({}) == "en"
     i18n.LANG = "en"
     assert i18n._("Botões") == "Buttons" and i18n._("nope") == "nope"

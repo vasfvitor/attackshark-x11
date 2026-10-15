@@ -1,11 +1,13 @@
 """The ``x11gui`` main window: the mouse drawing with callouts on the left, settings tabs on the right."""
+import ctypes
 import json
 import os
+import sys
 import threading
 import tkinter as tk
 import tkinter.font as tkfont
 
-from .. import config, protocol as p
+from .. import config, protocol as p, state
 from . import i18n, mouse, theme
 from .drawing import rounded
 from .i18n import LANGS, _
@@ -14,7 +16,7 @@ from .sync import DeviceSync
 from .theme import ACCENT, BG, FG, LINE, LINE_FG, MUTED, TILE, TILE_HI
 from .widgets import ColorPicker, Pill, Select, Slider, Toggle, field, panel
 
-SETTINGS = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "sharkx11", "gui.json")
+SETTINGS = os.path.join(state.config_dir(), "gui.json")
 TABS = [("DPI", "dpi"), ("Desempenho", "perf"), ("Botões", "buttons"), ("Iluminação", "light"), ("Energia", "power")]
 BUTTON_NAMES = {"left": "Botão esquerdo", "right": "Botão direito", "middle": "Botão do meio (roda)",
                 "forward": "Lateral da frente (4)", "back": "Lateral de trás (5)"}
@@ -33,6 +35,7 @@ MODE_NAMES = {"off": "Desligado", "static": "Fixo", "breathing": "Respiração",
               "color_breathing": "Respiração colorida", "static_dpi": "Cor do DPI", "breathing_dpi": "Respiração do DPI"}
 POLLING = (125, 250, 500, 1000)
 LINKS = {p.PID_RECEIVER: "receptor 2.4G", p.PID_WIRED: "cabo USB"}
+WINDOWS = sys.platform == "win32"
 
 
 def load_settings():
@@ -63,7 +66,7 @@ class App(LiveInput, DeviceSync, tk.Tk):
         saved = load_settings().get("lang")
         i18n.LANG = saved if saved in LANGS else i18n.system_lang()
         self.restart = False
-        self.title("ATTACK SHARK X11 — Linux")
+        self.title("ATTACK SHARK X11")
         self.configure(bg=BG)
         theme.FAMILY = theme.pick_family(self)
         self.s = max(1.0, tkfont.Font(root=self, font=theme.font(10)).metrics("linespace") / 15)
@@ -442,6 +445,11 @@ class App(LiveInput, DeviceSync, tk.Tk):
 
 
 def main():
+    if WINDOWS:
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(1)     # sharp text on scaled displays; Tk scales itself
+        except (AttributeError, OSError):
+            pass
     while True:
         app = App()
         app.mainloop()

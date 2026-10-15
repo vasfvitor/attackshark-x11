@@ -1,6 +1,18 @@
 import json
+import os
 
 from sharkx11 import config, state
+
+
+def test_config_dir(monkeypatch):
+    monkeypatch.setenv("XDG_CONFIG_HOME", "/xdg")
+    monkeypatch.setenv("APPDATA", "C:/roaming")
+    monkeypatch.setattr(state, "WINDOWS", False)
+    assert state.config_dir() == os.path.join("/xdg", "sharkx11")
+    monkeypatch.setattr(state, "WINDOWS", True)
+    assert state.config_dir() == os.path.join("C:/roaming", "sharkx11")
+    monkeypatch.delenv("APPDATA")
+    assert state.config_dir() == os.path.join("/xdg", "sharkx11")
 
 
 def test_buttons_round_trip_and_fallbacks(tmp_path, monkeypatch):

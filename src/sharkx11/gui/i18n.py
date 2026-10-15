@@ -1,16 +1,22 @@
 """Interface language: Portuguese source strings are the keys, ``EN`` holds their English text."""
+import ctypes
 import os
+import sys
 
 LANGS = {"pt": "Português (Brasil)", "en": "English"}
+WINDOWS = sys.platform == "win32"
 LANG = "pt"                       # set at startup by the app (settings, else the system language)
 
 
 def system_lang(env=os.environ):
-    """"pt" when the first non-empty of LANGUAGE/LC_ALL/LC_MESSAGES/LANG is Portuguese, else "en"."""
+    """"pt" when the first non-empty of LANGUAGE/LC_ALL/LC_MESSAGES/LANG is Portuguese (on Windows, without
+    them: the user's UI language), else "en"."""
     for var in ("LANGUAGE", "LC_ALL", "LC_MESSAGES", "LANG"):
         value = env.get(var, "").split(":")[0]
         if value:
             return "pt" if value.lower().startswith("pt") else "en"
+    if WINDOWS:
+        return "pt" if ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF == 0x16 else "en"   # LANG_PORTUGUESE
     return "en"
 
 

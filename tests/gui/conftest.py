@@ -77,6 +77,7 @@ def settings_file(tmp_path_factory):
         d = tmp_path_factory.mktemp("cfg")
         mp.setattr(app_mod, "SETTINGS", str(d / "gui.json"))
         mp.setenv("XDG_CONFIG_HOME", str(d))
+        mp.delenv("APPDATA", raising=False)
         mp.setenv("LANGUAGE", "pt_BR:pt")
         yield str(d / "gui.json")
     i18n.LANG = "pt"

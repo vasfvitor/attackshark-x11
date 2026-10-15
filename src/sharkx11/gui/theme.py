@@ -18,7 +18,7 @@ LISTEN_S, OFFLINE_S = 1.2, 12    # each poll listens this long; no event for thi
 PULSE = 0.35
 
 FAMILY = "Sans"          # replaced at startup by pick_family()
-PREFERRED_FAMILIES = ("Inter", "Cantarell", "Noto Sans", "DejaVu Sans")
+PREFERRED_FAMILIES = ("Inter", "Cantarell", "Noto Sans", "DejaVu Sans", "Segoe UI")
 
 
 def pick_family(root):
