@@ -319,3 +319,20 @@ report 0x0b byte3 (GUESS).
 * Writes of 0x06, 0x04, 0x05 and 0x08 were each ACKed with `03 55 50 00` within ~10 ms, read back
   as written, took effect (static red light; front side button sent Volume +) and **survived a
   power cycle**: the mouse stores them itself. **CONFIRMED**
+
+---------------------------------------------------------------------------------------------------
+## 9. Windows (receiver 1d57:fa60, hidapi 0.15, Windows 10, 2026-10-15; `tools/probe_win.py`)
+* Windows splits interface 2 into four top-level collections, each with its own device path:
+  `MI_02&Col01` page 0x01 usage 0x80 (system control), `Col02` page 0x0C usage 0x01 (consumer:
+  media keys, report 0x02), `Col03` page 0x0A usage 0 (input report 0x03: heartbeat, ACK, DPI),
+  `Col04` page 0x0B usage 0 (the settings feature reports). Interfaces 0 and 3 are keyboards, 1 the
+  mouse: Windows opens those exclusively. **CONFIRMED**
+* The collections of one device share the instance path once `&ColNN` and the trailing `&NNNN` of
+  the instance id are dropped (`...&MI_02&Col03#8&2d75ef4f&0&0002#{guid}`). **CONFIRMED**
+* `hid_get_feature_report(id, len)` with the exact length of §3.2 works; a longer buffer returns the
+  report followed by junk. `hid_send_feature_report` with the exact length works (writes ACKed with
+  `03 55 50 00` and read back, as on Linux). **CONFIRMED**
+* Several handles can be open on `Col03` at once (the GUI's reader and the settings link); each gets
+  its own copy of the input reports. **CONFIRMED**
+* While the mouse sleeps the 0xA0 handshake answers byte 1 = 0, as on Linux; moving it wakes it.
+* This unit reports version `01 09` in report 0x0b (the one of §8 reported `01 12`).
