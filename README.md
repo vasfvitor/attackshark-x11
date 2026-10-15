@@ -1,8 +1,8 @@
-# ATTACK SHARK X11 on Linux
+# ATTACK SHARK X11 for Linux and Windows
 
 Open-source configurator for the **ATTACK SHARK X11** wireless mouse: a GUI (`x11gui`) and a command-line
-tool (`x11ctl`). The official software only runs on Windows; this one talks to the mouse directly over
-`/dev/hidraw`, through the 2.4G receiver or the USB cable. Python standard library and Tk only, no daemon.
+tool (`x11ctl`). It talks to the mouse directly, through the 2.4G receiver or the USB cable: over
+`/dev/hidraw` on Linux (Python standard library and Tk only), through `hidapi` on Windows. No daemon.
 
 ![x11gui: DPI stages](docs/screenshots/dpi.png)
 
@@ -53,6 +53,19 @@ pip install .            # or run ./x11gui.py and ./x11ctl.py straight from the 
 The udev rule gives the logged-in user access to the mouse's settings interface (`1d57:fa60` receiver,
 `1d57:fa55` cable). Without it you get "permission denied".
 
+### Windows
+
+Requirements: Python ≥ 3.8 from [python.org](https://www.python.org/downloads/windows/) (Tk included). No
+driver or admin rights needed.
+
+```powershell
+git clone https://github.com/vasfvitor/attackshark-x11.git; cd attackshark-x11
+py -m pip install .      # installs hidapi too; or: py -m pip install hidapi, then py x11gui.py / py x11ctl.py
+```
+
+On Windows the drawing lights up only for the DPI button and media keys: Windows keeps the clicks and the
+wheel to itself.
+
 ## Use
 
 ### Graphical interface
@@ -81,7 +94,7 @@ x11ctl backup x11.json && x11ctl restore x11.json
 ```
 
 The mouse cannot report its button map back, so (like the official app) the last map written is kept in
-`~/.config/sharkx11/buttons.json`.
+`~/.config/sharkx11/buttons.json` (`%APPDATA%\sharkx11\buttons.json` on Windows).
 
 ## Good to know
 
@@ -110,8 +123,11 @@ python3 -m venv .venv --system-site-packages && .venv/bin/pip install -e ".[test
 .venv/bin/python -m coverage run -m pytest -q && .venv/bin/python -m coverage report
 ```
 
-The tests run against `tests/fake_mouse.py`, an emulator of the mouse behind its receiver, and never touch
-real hardware. Coverage is 100% (lines and branches).
+On Windows: `py -m venv .venv`, `.venv\Scripts\pip install -e ".[test]"`, `.venv\Scripts\python -m pytest -q`.
+
+The tests run against `tests/fake_mouse.py`, an emulator of the mouse behind its receiver, and a stand-in for
+`hidapi`; they never touch real hardware. Coverage is 100% (lines and branches) on Linux; on Windows the
+hidraw/sysfs code is skipped.
 
 ## License
 

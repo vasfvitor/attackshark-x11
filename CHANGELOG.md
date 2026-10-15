@@ -4,6 +4,11 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## Unreleased
 
+* Windows support: `x11ctl` and `x11gui` reach the mouse through `hidapi` (installed with the package on
+  Windows only); Linux keeps `/dev/hidraw` and the standard library. Settings and the button map live in
+  `%APPDATA%\sharkx11` there. On Windows the drawing lights up for the DPI button and media keys only, as
+  Windows keeps the clicks and the wheel to itself. `tools/probe_win.py` is the Windows read-only probe.
+
 ## 0.1.0-beta.2 — 2026-10-14
 
 * The drawing lights up each button while it is pressed on the mouse, with a short fade after release; the
