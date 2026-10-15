@@ -66,6 +66,14 @@ py -m pip install .      # installs hidapi too; or: py -m pip install hidapi, th
 On Windows the drawing lights up only for the DPI button and media keys: Windows keeps the clicks and the
 wheel to itself.
 
+#### Battery in the tray (Windows)
+
+`x11tray` (or `py x11tray.py` from the checkout) puts the battery percentage in the notification area: green,
+yellow at 30% and below, red at 15% and below, grey with the last reading while the mouse sleeps, a bar under
+the number while it charges. It is a separate, read-only process (it only listens to the mouse's battery
+heartbeat) and runs alongside `x11gui`. It starts with Windows; untick "Start with Windows" in its menu to stop
+that.
+
 ## Use
 
 ### Graphical interface

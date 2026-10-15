@@ -110,4 +110,11 @@ EN = {
     "receptor 2.4G": "2.4G receiver",
     "cabo USB": "USB cable",
     "✓ Salvo no mouse.": "✓ Saved to the mouse.",
+    # x11tray
+    "receptor não encontrado": "receiver not found",
+    "mouse dormindo ou desligado": "mouse asleep or off",
+    " (última leitura: {}%)": " (last reading: {}%)",
+    ", carregando": ", charging",
+    "Iniciar com o Windows": "Start with Windows",
+    "Sair": "Quit",
 }

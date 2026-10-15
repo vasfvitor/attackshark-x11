@@ -8,6 +8,8 @@ This project follows [Semantic Versioning](https://semver.org/).
   Windows only); Linux keeps `/dev/hidraw` and the standard library. Settings and the button map live in
   `%APPDATA%\sharkx11` there. On Windows the drawing lights up for the DPI button and media keys only, as
   Windows keeps the clicks and the wheel to itself. `tools/probe_win.py` is the Windows read-only probe.
+* `x11tray` (Windows): the battery percentage in the notification area, coloured by level, grey while the
+  mouse sleeps. A separate read-only process that starts with Windows (can be turned off in its menu).
 
 ## 0.1.0-beta.2 — 2026-10-14
 

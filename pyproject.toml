@@ -20,16 +20,21 @@ classifiers = [
     "Environment :: X11 Applications",
 ]
 
-dependencies = ["hidapi>=0.14; sys_platform == 'win32'"]
+dependencies = [
+    "hidapi>=0.14; sys_platform == 'win32'",
+    "pystray>=0.19; sys_platform == 'win32'",
+    "Pillow>=10.1; sys_platform == 'win32'",
+]
 
 [project.optional-dependencies]
-test = ["pytest", "coverage"]
+test = ["pytest", "coverage", "Pillow>=10.1"]
 
 [project.scripts]
 x11ctl = "sharkx11.cli:main"
 
 [project.gui-scripts]
 x11gui = "sharkx11.gui.app:main"
+x11tray = "sharkx11.tray:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
